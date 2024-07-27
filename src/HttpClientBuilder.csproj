@@ -5,6 +5,14 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+    <PackageId>HttpClientBuilder</PackageId>
+    <Version>1.0.0</Version>
+    <Authors>Amaury BEAUNÉ</Authors>
+    <Company>SARL TKHA</Company>
+    <Description>A class that provides a fluent API for building an HttpClient instance.</Description>
+    <PackageTags>HttpClient;Builder;API;Fluent</PackageTags>
+    <RepositoryUrl>https://github.com/SARL-TKHA/HttpClientBuilder</RepositoryUrl>
   </PropertyGroup>
 
 </Project>
