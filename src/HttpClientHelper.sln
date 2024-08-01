@@ -3,7 +3,7 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.5.002.0
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "HttpClientBuilder", "HttpClientBuilder.csproj", "{22DB547A-9B9B-4D95-A482-2B64AECA2360}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "HttpClientHelper", "HttpClientHelper.csproj", "{22DB547A-9B9B-4D95-A482-2B64AECA2360}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

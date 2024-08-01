@@ -12,7 +12,7 @@
     <Company>SARL TKHA</Company>
     <Description>A class that provides a fluent API for building an HttpClient instance.</Description>
     <PackageTags>HttpClient;Builder;API;Fluent</PackageTags>
-    <RepositoryUrl>https://github.com/SARL-TKHA/HttpClientBuilder</RepositoryUrl>
+    <RepositoryUrl>https://github.com/SARL-TKHA/HttpClientHelper</RepositoryUrl>
   </PropertyGroup>
 
 </Project>

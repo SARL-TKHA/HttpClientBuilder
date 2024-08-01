@@ -1,9 +1,12 @@
 ﻿using System.Net;
 using System.Net.Http.Headers;
+using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Web;
+using HttpClientHelper.CustomExceptions;
 
-namespace HttpClientBuilder;
+namespace HttpClientHelper;
 
 /// <summary>
 /// A class that provides a fluent API for building an HttpClient instance.
@@ -15,16 +18,21 @@ public class HttpClientBuilder
     /// </summary>
     private HttpClient _httpClient = new HttpClient();
 
+    private HttpClientHandler? _httpClientHandler = null;
+
     #region private properties
 
     private string? _baseAddress = null;
-    private Dictionary<string, string> _headers = new Dictionary<string, string>();
-    private List<MediaTypeWithQualityHeaderValue> _contentTypes = new List<MediaTypeWithQualityHeaderValue>();
+    private readonly Dictionary<string, string> _headers = new Dictionary<string, string>();
+    private readonly List<MediaTypeWithQualityHeaderValue> _contentTypes = new List<MediaTypeWithQualityHeaderValue>();
     private AuthenticationHeaderValue? _authentication = null;
     private TimeSpan _timeout = TimeSpan.FromSeconds(30);
     private long _maxResponseContentBufferSize = 1024 * 1024 * 10; // 10 MB
+    private X509Certificate2? _certificate = null;
+    private X509Certificate2? _trustedCertificate = null;
 
-    #endregion
+
+    #endregion private properties
 
     /// <summary>
     /// Initializes a new instance of the <see cref="HttpClientBuilder"/> class.
@@ -155,7 +163,79 @@ public class HttpClientBuilder
         return this;
     }
 
-    #endregion
+    #endregion Content Types
+
+    #region Certificates
+
+    /// <summary>
+    /// Adds a certificate to the HttpClient's default request headers.
+    /// </summary>
+    /// <param name="certificate">The certificate to add.</param>
+    /// <returns>The current instance of the <see cref="HttpClientBuilder"/>.</returns>
+    public HttpClientBuilder AddCertificate(X509Certificate2 certificate)
+    {
+        this._certificate = certificate;
+        return this;
+    }
+
+    /// <summary>
+    /// Adds a certificate to the HttpClient's default request headers.
+    /// </summary>
+    /// <param name="certificatePath">The path to the certificate file.</param>
+    /// <returns>The current instance of the <see cref="HttpClientBuilder"/>.</returns>
+    /// <exception cref="ArgumentNullException">The certificate path cannot be null or empty.</exception>
+    /// <exception cref="ArgumentException">The certificate file does not exist.</exception>
+    /// <exception cref="CryptographicException">The certificate file is invalid.</exception>
+    /// <exception cref="InvalidOperationException">The certificate file is invalid.</exception>
+    public HttpClientBuilder AddCertificate(string certificatePath)
+    {
+        if (string.IsNullOrWhiteSpace(certificatePath))
+        {
+            throw new ArgumentNullException(nameof(certificatePath), "The certificate path cannot be null or empty.");
+        }
+        if (!File.Exists(certificatePath))
+        {
+            throw new ArgumentException("The certificate file does not exist.", nameof(certificatePath));
+        }
+
+        X509Certificate2 certificate = new X509Certificate2(certificatePath);
+        return AddCertificate(certificate);
+    }
+
+    /// <summary>
+    /// Adds a trusted root certificate to the HttpClient's default request headers.
+    /// </summary>
+    /// <param name="certificate">The trusted root certificate to add.</param>
+    /// <returns>The current instance of the <see cref="HttpClientBuilder"/>.</returns>
+    public HttpClientBuilder AddTrustedCertificate(X509Certificate2 certificate)
+    {
+        this._trustedCertificate = certificate;
+        return this;
+    }
+
+    /// <summary>
+    /// Adds a trusted root certificate to the HttpClient's default request headers.
+    /// </summary>
+    /// <param name="certificatePath">The path to the trusted root certificate file.</param>
+    /// <returns>The current instance of the <see cref="HttpClientBuilder"/>.</returns>
+    /// <exception cref="ArgumentNullException">The certificate path cannot be null or empty.</exception>
+    /// <exception cref="ArgumentException">The certificate file does not exist.</exception>
+    public HttpClientBuilder AddTrustedCertificate(string certificatePath)
+    {
+        if (string.IsNullOrWhiteSpace(certificatePath))
+        {
+            throw new ArgumentNullException(nameof(certificatePath), "The certificate path cannot be null or empty.");
+        }
+        if (!File.Exists(certificatePath))
+        {
+            throw new ArgumentException("The certificate file does not exist.", nameof(certificatePath));
+        }
+
+        X509Certificate2 certificate = new X509Certificate2(certificatePath);
+        return AddTrustedCertificate(certificate);
+    }
+
+    #endregion Certificates
 
     #region Authentication
 
@@ -281,39 +361,15 @@ public class HttpClientBuilder
     /// </summary>
     /// <param name="handler">The custom handler.</param>
     /// <returns>The current instance of the <see cref="HttpClientBuilder"/>.</returns>
-    public HttpClientBuilder AddHandler(DelegatingHandler handler)
+    public HttpClientBuilder AddHandler(HttpClientHandler handler)
     {
-        _httpClient = new HttpClient(handler);
-        return this;
-    }
-
-    /// <summary>
-    /// Adds a custom message handler to the HttpClient.
-    /// <b>Warning:</b> This method will override the default HttpClient instance.
-    /// </summary>
-    /// <param name="handler">The custom message handler.</param>
-    /// <returns>The current instance of the <see cref="HttpClientBuilder"/>.</returns>
-    public HttpClientBuilder AddMessageHandler(HttpMessageHandler handler)
-    {
-        _httpClient = new HttpClient(handler);
-        return this;
-    }
-
-    /// <summary>
-    /// Adds a custom delegating handler to the HttpClient.
-    /// <b>Warning:</b> This method will override the default HttpClient instance.
-    /// </summary>
-    /// <param name="handler">The custom delegating handler.</param>
-    /// <returns>The current instance of the <see cref="HttpClientBuilder"/>.</returns>
-    public HttpClientBuilder AddDelegatingHandler(DelegatingHandler handler)
-    {
-        _httpClient = new HttpClient(handler);
+        this._httpClientHandler = handler;
         return this;
     }
 
     #endregion
 
-    #region Properties
+    #region Max Response Content Buffer Size
 
     /// <summary>
     /// Sets the maximum response content buffer size for the HttpClient.
@@ -458,6 +514,54 @@ public class HttpClientBuilder
     #region Build
 
     /// <summary>
+    /// Builds the Certificate part
+    /// </summary>
+    private void BuildCertificate()
+    {
+        if (_certificate == null)
+        {
+            return;
+        }
+        if (_httpClientHandler == null)
+        {
+            _httpClientHandler = new HttpClientHandler();
+        }
+        _httpClientHandler.ClientCertificates.Add(_certificate);
+        if (_trustedCertificate == null)
+        {
+            return;
+        }
+        _httpClientHandler.ServerCertificateCustomValidationCallback = (message, cert, chain, errors) =>
+        {
+            if (cert == null)
+            {
+                throw new CertificateException("Certificate is null");
+            }
+
+            X509Chain certificateChain = new X509Chain();
+            certificateChain.ChainPolicy.RevocationMode = X509RevocationMode.NoCheck;
+            certificateChain.ChainPolicy.VerificationFlags = X509VerificationFlags.AllowUnknownCertificateAuthority;
+            certificateChain.ChainPolicy.ExtraStore.Add(_trustedCertificate);
+
+            bool isChainValid = certificateChain.Build(new X509Certificate2(cert));
+
+            if (!isChainValid)
+            {
+                throw new CertificateException($"Certificate chain is not valid. Verify the trusted certificate: {_trustedCertificate}");
+            }
+
+            bool isServerCertificateValid = certificateChain.ChainElements[^1].Certificate.Thumbprint == _trustedCertificate.Thumbprint;
+
+            if (!isServerCertificateValid)
+            {
+                throw new CertificateException($"Server certificate is not valid. Root certificate thumbprint {certificateChain.ChainElements[^1].Certificate.Thumbprint}. Server certificate thumbprint {_trustedCertificate.Thumbprint}");
+            }
+
+            return isServerCertificateValid;
+        };
+    }
+
+    /// <summary>
     /// Builds and returns the configured HttpClient instance.
     /// </summary>
     /// <returns>The configured HttpClient instance.</returns>
@@ -466,6 +570,11 @@ public class HttpClientBuilder
         if (_baseAddress == null)
         {
             throw new InvalidOperationException("The base address must be set before building the HttpClient.");
+        }
+        BuildCertificate();
+        if (_httpClientHandler != null)
+        {
+            _httpClient = new HttpClient(_httpClientHandler);
         }
         _httpClient!.BaseAddress = new Uri(_baseAddress);
         _httpClient!.Timeout = _timeout;
@@ -487,5 +596,5 @@ public class HttpClientBuilder
         return _httpClient!;
     }
 
-    #endregion
+    #endregion Build
 }
